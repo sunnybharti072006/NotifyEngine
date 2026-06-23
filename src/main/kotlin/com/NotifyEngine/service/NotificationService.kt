@@ -22,23 +22,23 @@ class NotificationService(
 
     fun sendNotification(tenantId: String, request: NotificationRequest): NotificationResponse {
 
-        // Step 1: Tenant exist karta hai?
+
         tenantRepository.findById(tenantId)
             .orElseThrow { RuntimeException("Tenant not found: $tenantId") }
 
-        // Step 2: Rate limit check — spam rokne ke liye
+
         if (rateLimitService.isRateLimited(request.userId, tenantId)) {
             throw RuntimeException("Rate limit exceeded for user: ${request.userId}")
         }
 
-        // Step 3: Template exist karta hai aur placeholders sahi hain?
+
         val (mergedSubject, mergedBody) = templateService.mergeTemplate(
             tenantId = tenantId,
             templateKey = request.templateId,
             placeholders = request.placeholders
         )
 
-        // Step 4: Har channel ke liye alag notification record banao
+       
         val notificationIds = mutableListOf<String>()
 
         request.channels.forEach { channel ->
@@ -50,17 +50,17 @@ class NotificationService(
                 this.channel = channel
                 this.status = "PENDING"
                 this.priority = request.priority
-                // Agar scheduledAt diya hai toh future mein bhejo
+
                 this.scheduledAt = request.scheduledAt?.let {
                     LocalDateTime.parse(it)
                 }
             }
 
-            // Database mein save karo
+
             val saved = notificationRepository.save(notification)
             notificationIds.add(saved.id)
 
-            // Queue mein daalo — async process hoga
+
             notificationQueue.enqueue(
                 notification = saved,
                 subject = mergedSubject,
@@ -68,11 +68,11 @@ class NotificationService(
             )
         }
 
-        // Step 5: Rate limit counter badhao
+
         rateLimitService.incrementCount(request.userId, tenantId)
 
-        // Step 6: 202 Accepted return karo — turant response
-        // Client wait nahi karega — background mein process hoga
+
+
         return NotificationResponse(
             notificationId = notificationIds.joinToString(","),
             status = "QUEUED",
